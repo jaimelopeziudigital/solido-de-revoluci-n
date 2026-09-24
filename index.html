@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sólido de Revolución - Método de Capas Cilíndricas</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        parabola: '#38bdf8', // Cyan
+                        linea: '#f59e0b',    // Amber
+                        eje: '#ec4899',      // Pink/Magenta
+                        capa: '#10b981',     // Emerald
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- KaTeX for math formulas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        input[type=range] {
+            accent-color: #38bdf8;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full w-full select-none flex flex-col">
+
+    <header class="absolute top-0 left-0 right-0 z-20 px-4 py-3 flex justify-between items-center glass-panel border-b border-slate-800/80">
+        <div class="flex items-center gap-3">
+            <div class="p-2 bg-indigo-600/30 rounded-lg border border-indigo-500/40">
+                <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="font-bold text-base md:text-lg text-slate-100 flex items-center gap-2">
+                    Método de Capas Cilíndricas
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-normal">Sólido 3D</span>
+                </h1>
+                <p class="text-xs text-slate-400 hidden sm:block">Región entre $f(x)=4x-x^2$ y $g(x)=x$ girando alrededor del Eje Y</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="btn-reset-cam" title="Reiniciar Cámara" class="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition flex items-center gap-1.5 text-xs font-medium border border-slate-700">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span class="hidden md:inline">Vista Inicial</span>
+            </button>
+            <button id="btn-toggle-math" title="Mostrar/Ocultar Deducción" class="p-2 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 text-white transition flex items-center gap-1.5 text-xs font-medium border border-indigo-400/40">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                </svg>
+                <span class="hidden md:inline">Ecuaciones</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="relative w-full h-full flex-1 overflow-hidden">
+        
+        <div id="canvas-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+        <aside id="controls-panel" class="absolute top-16 left-4 bottom-6 w-80 md:w-96 glass-panel rounded-2xl z-10 flex flex-col p-4 shadow-2xl transition-all duration-300 border border-slate-700/60 overflow-hidden">
+            
+            <div class="flex justify-between items-center pb-3 mb-3 border-b border-slate-800">
+                <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/>
+                    </svg>
+                    Panel de Control
+                </h2>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-5">
+                
+                <!-- Visualization Mode -->
+                <div>
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 block">Modo de Simulación</label>
+                    <div class="grid grid-cols-3 gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+                        <button id="tab-solid" class="tab-btn py-2 px-1 rounded-lg font-medium transition bg-indigo-600 text-white shadow text-center">Sólido</button>
+                        <button id="tab-shell" class="tab-btn py-2 px-1 rounded-lg font-medium transition text-slate-400 hover:text-white text-center">1 Capa</button>
+                        <button id="tab-riemann" class="tab-btn py-2 px-1 rounded-lg font-medium transition text-slate-400 hover:text-white text-center">N Capas</button>
+                    </div>
+                </div>
+
+                <div class="space-y-2 bg-slate-900/50 p-3 rounded-xl border border-slate-800">
+                    <div class="flex justify-between items-center text-xs">
+                        <label class="font-medium text-slate-300 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                            Ángulo de Rotación ($\theta$)
+                        </label>
+                        <span id="angle-value" class="code-font font-semibold text-sky-400">360°</span>
+                    </div>
+                    <input id="slider-angle" type="range" min="0" max="360" value="360" step="1" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                    <div class="flex gap-2 pt-1">
+                        <button id="btn-play-rotation" class="flex-1 py-1.5 px-3 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/30 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1.5">
+                            <svg id="icon-play" class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            <span id="text-play">Animar Rotación</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="section-single-shell" class="hidden space-y-3 bg-emerald-950/30 p-3 rounded-xl border border-emerald-500/30">
+                    <div class="flex justify-between items-center text-xs">
+                        <label class="font-medium text-emerald-300">Posición del Radio ($x$)</label>
+                        <span id="shell-x-val" class="code-font font-bold text-emerald-400">x = 1.50</span>
+                    </div>
+                    <input id="slider-shell-x" type="range" min="0.10" max="2.90" value="1.50" step="0.05" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                    
+                    <div class="grid grid-cols-2 gap-2 text-xs code-font pt-1">
+                        <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                            <div class="text-[10px] text-slate-400">Radio $p(x) = x$</div>
+                            <div id="stat-radius" class="text-emerald-400 font-bold">1.50 u</div>
+                        </div>
+                        <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800">
+                            <div class="text-[10px] text-slate-400">Altura $h(x) = 3x-x^2$</div>
+                            <div id="stat-height" class="text-emerald-400 font-bold">2.25 u</div>
+                        </div>
+                    </div>
+                    <div class="bg-slate-900/80 p-2 rounded-lg border border-slate-800 text-xs code-font flex justify-between items-center">
+                        <span class="text-[10px] text-slate-400">Área Lateral $2\pi x h(x)$:</span>
+                        <span id="stat-area" class="text-emerald-400 font-bold">21.21 u²</span>
+                    </div>
+                </div>
+
+                <div id="section-riemann-shells" class="hidden space-y-3 bg-indigo-950/30 p-3 rounded-xl border border-indigo-500/30">
+                    <div class="flex justify-between items-center text-xs">
+                        <label class="font-medium text-indigo-300">Número de Capas ($N$)</label>
+                        <span id="riemann-n-val" class="code-font font-bold text-indigo-400">N = 8</span>
+                    </div>
+                    <input id="slider-riemann-n" type="range" min="2" max="30" value="8" step="1" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                    
+                    <div class="text-xs code-font bg-slate-900/80 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                        <div class="flex justify-between text-slate-400 text-[11px]">
+                            <span>Grosor Capa ($\Delta x$):</span>
+                            <span id="stat-dx" class="text-indigo-300">0.375 u</span>
+                        </div>
+                        <div class="flex justify-between text-slate-300 pt-1 border-t border-slate-800">
+                            <span>Suma de Riemann:</span>
+                            <span id="stat-riemann-sum" class="text-indigo-400 font-bold">41.82 u³</span>
+                        </div>
+                        <div class="flex justify-between text-[10px] text-slate-400">
+                            <span>Error vs Exacto:</span>
+                            <span id="stat-riemann-error" class="text-amber-400">-1.39%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-3 pt-2 border-t border-slate-800">
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 block">Apariencia Visual</label>
+                    
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-300">Opacidad del Sólido</span>
+                            <span id="opacity-val" class="code-font text-slate-400">0.75</span>
+                        </div>
+                        <input id="slider-opacity" type="range" min="0.1" max="1" value="0.75" step="0.05" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <label class="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60">
+                            <input id="chk-wireframe" type="checkbox" class="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0">
+                            <span>Estructura Wireframe</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60">
+                            <input id="chk-region-2d" type="checkbox" checked class="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0">
+                            <span>Región 2D Base</span>
+                        </label>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60">
+                            <input id="chk-axes" type="checkbox" checked class="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0">
+                            <span>Ejes 3D (X, Y, Z)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/60 p-2 rounded-lg border border-slate-800 cursor-pointer hover:bg-slate-800/60">
+                            <input id="chk-grid" type="checkbox" checked class="rounded border-slate-700 bg-slate-800 text-sky-500 focus:ring-0">
+                            <span>Rejilla de Fondo</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="pt-2 border-t border-slate-800 space-y-1.5 text-xs">
+                    <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">Leyenda de Funciones</label>
+                    <div class="flex items-center justify-between text-slate-300">
+                        <span class="flex items-center gap-2">
+                            <span class="w-3 h-1 rounded bg-sky-400"></span>
+                            Parábola $f(x) = 4x - x^2$
+                        </span>
+                        <span class="code-font text-[10px] text-sky-400">Superior</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-300">
+                        <span class="flex items-center gap-2">
+                            <span class="w-3 h-1 rounded bg-amber-400"></span>
+                            Recta $g(x) = x$
+                        </span>
+                        <span class="code-font text-[10px] text-amber-400">Inferior</span>
+                    </div>
+                    <div class="flex items-center justify-between text-slate-300">
+                        <span class="flex items-center gap-2">
+                            <span class="w-3 h-1 rounded bg-pink-500"></span>
+                            Eje Y (Eje de Giro)
+                        </span>
+                        <span class="code-font text-[10px] text-pink-400">x = 0</span>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <aside id="math-panel" class="absolute top-16 right-4 bottom-6 w-80 md:w-96 glass-panel rounded-2xl z-10 flex flex-col p-4 shadow-2xl transition-all duration-300 border border-slate-700/60 overflow-hidden">
+            
+            <div class="flex justify-between items-center pb-3 mb-3 border-b border-slate-800">
+                <h2 class="font-semibold text-sm text-slate-200 flex items-center gap-2">
+                    <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    Deducción Paso a Paso
+                </h2>
+                <button id="btn-close-math" class="text-slate-400 hover:text-white p-1 rounded">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-4 text-xs">
+                
+                <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-3 space-y-2">
+                    <div class="font-semibold text-indigo-300 text-xs">Fórmula de Capas Cilíndricas</div>
+                    <div class="code-font text-center bg-slate-900/90 py-2 rounded-lg text-indigo-200 border border-slate-800 text-xs">
+                        $$V = 2\pi \int_{a}^{b} p(x) \cdot h(x) \, dx$$
+                    </div>
+                </div>
+
+                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1.5">
+                    <div class="font-semibold text-slate-200 flex items-center justify-between">
+                        <span>1. Puntos de Intersección</span>
+                    </div>
+                    <p class="text-slate-400 text-[11px]">Igualando $4x - x^2 = x \implies 3x - x^2 = 0$</p>
+                    <div class="code-font text-emerald-400 text-[11px] font-semibold">$x = 0 \quad \text{y} \quad x = 3$</div>
+                </div>
+
+                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-1.5">
+                    <div class="font-semibold text-slate-200">2. Elementos Cilíndricos</div>
+                    <ul class="text-slate-300 space-y-1 text-[11px]">
+                        <li>• <b>Radio Medio:</b> $p(x) = x$</li>
+                        <li>• <b>Altura de la Capa:</b> $h(x) = (4x - x^2) - x = 3x - x^2$</li>
+                        <li>• <b>Diferencial:</b> $dV = 2\pi x (3x - x^2) dx$</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <div class="font-semibold text-slate-200">3. Evaluación de la Integral</div>
+                    <div class="code-font bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-slate-200 space-y-1 text-[11px]">
+                        <div>$$V = 2\pi \int_{0}^{3} (3x^2 - x^3) \, dx$$</div>
+                        <div>$$V = 2\pi \left[ x^3 - \frac{x^4}{4} \right]_{0}^{3}$$</div>
+                        <div>$$V = 2\pi \left( 27 - \frac{81}{4} \right) = 2\pi \left( \frac{27}{4} \right)$$</div>
+                    </div>
+                </div>
+
+                <div class="bg-emerald-950/40 border border-emerald-500/30 p-3 rounded-xl space-y-1 text-center">
+                    <div class="text-[11px] text-emerald-300 uppercase font-semibold">Resultado Exacto</div>
+                    <div class="code-font text-base font-bold text-emerald-400">
+                        $$V = \frac{27\pi}{2} \approx 42.4115 \text{ u}^3$$
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-full border border-slate-700/80 flex items-center gap-4 text-xs z-10 pointer-events-auto">
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-slate-300 font-medium">Volumen Calculado:</span>
+                <span id="hud-volume" class="code-font font-bold text-sky-400 text-sm">42.41 u³</span>
+            </div>
+            <div class="h-3 w-[1px] bg-slate-700"></div>
+            <div class="text-slate-400 text-[11px] hidden sm:block">
+                Arrastra para rotar la cámara 3D
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Global variables and state management
+        let scene, camera, renderer, controls;
+        let solidMesh = null, wireframeMesh = null;
+        let singleShellMesh = null, singleShellCapMesh = null;
+        let riemannShellsGroup = null;
+        let region2DMesh = null, region2DLinesGroup = null;
+        let axesGroup = null, gridHelper = null;
+
+        const state = {
+            mode: 'solid', // 'solid', 'shell', 'riemann'
+            sweepAngle: 360,
+            opacity: 0.75,
+            wireframe: false,
+            showRegion2D: true,
+            showAxes: true,
+            showGrid: true,
+            shellX: 1.5,
+            riemannN: 8,
+            isAnimating: false,
+            animationSpeed: 1.2
+        };
+
+        const f_top = (x) => 4 * x - x * x;
+        const g_bot = (x) => x;
+        const h_height = (x) => f_top(x) - g_bot(x);
+        const EXACT_VOLUME = (27 * Math.PI) / 2;
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x080d1a);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(6, 4.5, 7);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.1;
+            controls.target.set(0, 1.8, 0);
+            controls.update();
+
+            setupLighting();
+
+            setupHelpers();
+
+            window.addEventListener('resize', onWindowResize);
+            setupUIEventListeners();
+
+            updateVisualization();
+            
+            // Render Math equations with KaTeX
+            if (window.renderMathInElement) {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false}
+                    ]
+                });
+            }
+
+            animate();
+        }
+
+        function setupLighting() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.9);
+            dirLight1.position.set(8, 12, 10);
+            dirLight1.castShadow = true;
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.4);
+            dirLight2.position.set(-8, -4, -6);
+            scene.add(dirLight2);
+
+            const hemiLight = new THREE.HemisphereLight(0x1e1b4b, 0x0f172a, 0.5);
+            scene.add(hemiLight);
+        }
+
+        function setupHelpers() {
+            gridHelper = new THREE.GridHelper(10, 20, 0x334155, 0x1e293b);
+            gridHelper.position.y = 0;
+            scene.add(gridHelper);
+
+            axesGroup = new THREE.Group();
+
+            // X Axis
+            const xAxisGeom = new THREE.CylinderGeometry(0.02, 0.02, 8);
+            const xAxisMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+            const xAxis = new THREE.Mesh(xAxisGeom, xAxisMat);
+            xAxis.rotation.z = -Math.PI / 2;
+            xAxis.position.x = 4;
+            axesGroup.add(xAxis);
+
+            // Z Axis
+            const zAxisGeom = new THREE.CylinderGeometry(0.02, 0.02, 8);
+            const zAxisMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+            const zAxis = new THREE.Mesh(zAxisGeom, zAxisMat);
+            zAxis.rotation.x = Math.PI / 2;
+            zAxis.position.z = 4;
+            axesGroup.add(zAxis);
+
+            // Y Axis (Axis of Revolution)
+            const yAxisGeom = new THREE.CylinderGeometry(0.035, 0.035, 6);
+            const yAxisMat = new THREE.MeshStandardMaterial({ 
+                color: 0xec4899, 
+                emissive: 0xec4899, 
+                emissiveIntensity: 0.6,
+                roughness: 0.2
+            });
+            const yAxis = new THREE.Mesh(yAxisGeom, yAxisMat);
+            yAxis.position.y = 3;
+            axesGroup.add(yAxis);
+
+            // Rotation Indicator Ring
+            const ringGeom = new THREE.TorusGeometry(0.6, 0.02, 16, 32, Math.PI * 1.5);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xec4899 });
+            const ring = new THREE.Mesh(ringGeom, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 4.8;
+            axesGroup.add(ring);
+
+            scene.add(axesGroup);
+        }
+
+        function buildSolidGeometry(maxAngleRad) {
+            if (solidMesh) scene.remove(solidMesh);
+            if (wireframeMesh) scene.remove(wireframeMesh);
+
+            if (maxAngleRad <= 0.001) return;
+
+            const numX = 50;
+            const numSegmentsAngle = Math.max(4, Math.floor(64 * (maxAngleRad / (2 * Math.PI))));
+
+            const positions = [];
+            const indices = [];
+            const uvs = [];
+
+            const xVals = [];
+            for (let i = 0; i <= numX; i++) {
+                xVals.push((i / numX) * 3);
+            }
+
+            const angles = [];
+            for (let j = 0; j <= numSegmentsAngle; j++) {
+                angles.push((j / numSegmentsAngle) * maxAngleRad);
+            }
+
+            // Top Surface Vertices (f(x) = 4x - x^2)
+            for (let j = 0; j <= numSegmentsAngle; j++) {
+                const a = angles[j];
+                const cosA = Math.cos(a);
+                const sinA = Math.sin(a);
+                for (let i = 0; i <= numX; i++) {
+                    const x = xVals[i];
+                    const y = f_top(x);
+                    positions.push(x * cosA, y, x * sinA);
+                    uvs.push(i / numX, j / numSegmentsAngle);
+                }
+            }
+
+            // Bottom Surface Vertices (g(x) = x)
+            const topOffset = (numSegmentsAngle + 1) * (numX + 1);
+            for (let j = 0; j <= numSegmentsAngle; j++) {
+                const a = angles[j];
+                const cosA = Math.cos(a);
+                const sinA = Math.sin(a);
+                for (let i = 0; i <= numX; i++) {
+                    const x = xVals[i];
+                    const y = g_bot(x);
+                    positions.push(x * cosA, y, x * sinA);
+                    uvs.push(i / numX, j / numSegmentsAngle);
+                }
+            }
+
+            const stride = numX + 1;
+
+            // Top Surface Triangles
+            for (let j = 0; j < numSegmentsAngle; j++) {
+                for (let i = 0; i < numX; i++) {
+                    const p1 = j * stride + i;
+                    const p2 = j * stride + (i + 1);
+                    const p3 = (j + 1) * stride + i;
+                    const p4 = (j + 1) * stride + (i + 1);
+
+                    indices.push(p1, p3, p2);
+                    indices.push(p2, p3, p4);
+                }
+            }
+
+            // Bottom Surface Triangles
+            for (let j = 0; j < numSegmentsAngle; j++) {
+                for (let i = 0; i < numX; i++) {
+                    const p1 = topOffset + j * stride + i;
+                    const p2 = topOffset + j * stride + (i + 1);
+                    const p3 = topOffset + (j + 1) * stride + i;
+                    const p4 = topOffset + (j + 1) * stride + (i + 1);
+
+                    indices.push(p1, p2, p3);
+                    indices.push(p2, p4, p3);
+                }
+            }
+
+            // Cut Caps at boundaries
+            if (maxAngleRad < Math.PI * 2) {
+                for (let i = 0; i < numX; i++) {
+                    const top1 = i;
+                    const top2 = i + 1;
+                    const bot1 = topOffset + i;
+                    const bot2 = topOffset + i + 1;
+
+                    indices.push(top1, bot1, top2);
+                    indices.push(top2, bot1, bot2);
+
+                    const endJ = numSegmentsAngle;
+                    const endTop1 = endJ * stride + i;
+                    const endTop2 = endJ * stride + (i + 1);
+                    const endBot1 = topOffset + endJ * stride + i;
+                    const endBot2 = topOffset + endJ * stride + (i + 1);
+
+                    indices.push(endTop1, endTop2, endBot1);
+                    indices.push(endTop2, endBot2, endBot1);
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x4f46e5,
+                roughness: 0.3,
+                metalness: 0.1,
+                transparent: true,
+                opacity: state.opacity,
+                side: THREE.DoubleSide
+            });
+
+            solidMesh = new THREE.Mesh(geometry, material);
+            solidMesh.castShadow = true;
+            solidMesh.receiveShadow = true;
+            scene.add(solidMesh);
+
+            if (state.wireframe) {
+                const wireGeom = new THREE.WireframeGeometry(geometry);
+                const wireMat = new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.4 });
+                wireframeMesh = new THREE.LineSegments(wireGeom, wireMat);
+                scene.add(wireframeMesh);
+            }
+        }
+
+        function buildSingleShell(xVal, maxAngleRad) {
+            if (singleShellMesh) scene.remove(singleShellMesh);
+            if (singleShellCapMesh) scene.remove(singleShellCapMesh);
+
+            if (maxAngleRad <= 0.001) return;
+
+            const yBot = g_bot(xVal);
+            const yTop = f_top(xVal);
+            const height = yTop - yBot;
+
+            if (height <= 0.001) return;
+
+            const thickness = 0.08;
+            const numSegments = Math.max(16, Math.floor(48 * (maxAngleRad / (2 * Math.PI))));
+
+            const cylinderGeom = new THREE.CylinderGeometry(
+                xVal, xVal, height, numSegments, 1, true, 0, maxAngleRad
+            );
+            cylinderGeom.translate(0, height / 2 + yBot, 0);
+
+            const cylinderMat = new THREE.MeshStandardMaterial({
+                color: 0x10b981,
+                emissive: 0x047857,
+                emissiveIntensity: 0.35,
+                roughness: 0.2,
+                transparent: true,
+                opacity: 0.85,
+                side: THREE.DoubleSide
+            });
+
+            singleShellMesh = new THREE.Mesh(cylinderGeom, cylinderMat);
+            scene.add(singleShellMesh);
+
+            singleShellCapMesh = new THREE.Group();
+
+            // Top and Bottom Ring contours
+            const topRingGeom = new THREE.TorusGeometry(xVal, 0.018, 12, numSegments, maxAngleRad);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+            
+            const topRing = new THREE.Mesh(topRingGeom, ringMat);
+            topRing.rotation.x = Math.PI / 2;
+            topRing.position.y = yTop;
+
+            const botRing = new THREE.Mesh(topRingGeom, ringMat);
+            botRing.rotation.x = Math.PI / 2;
+            botRing.position.y = yBot;
+
+            singleShellCapMesh.add(topRing);
+            singleShellCapMesh.add(botRing);
+
+            // Radius vector line from Y-axis to shell base
+            const radiusPoints = [new THREE.Vector3(0, yBot, 0), new THREE.Vector3(xVal, yBot, 0)];
+            const radiusGeom = new THREE.BufferGeometry().setFromPoints(radiusPoints);
+            const radiusLine = new THREE.Line(radiusGeom, new THREE.LineBasicMaterial({ color: 0xec4899, linewidth: 3 }));
+            singleShellCapMesh.add(radiusLine);
+
+            // Height vertical line along shell wall
+            const heightPoints = [new THREE.Vector3(xVal, yBot, 0), new THREE.Vector3(xVal, yTop, 0)];
+            const heightGeom = new THREE.BufferGeometry().setFromPoints(heightPoints);
+            const heightLine = new THREE.Line(heightGeom, new THREE.LineBasicMaterial({ color: 0xfacc15, linewidth: 3 }));
+            singleShellCapMesh.add(heightLine);
+
+            scene.add(singleShellCapMesh);
+        }
+
+        function buildRiemannShells(N, maxAngleRad) {
+            if (riemannShellsGroup) scene.remove(riemannShellsGroup);
+
+            if (maxAngleRad <= 0.001) return;
+
+            riemannShellsGroup = new THREE.Group();
+            const dx = 3 / N;
+
+            for (let i = 0; i < N; i++) {
+                const xMid = (i + 0.5) * dx;
+                const yBot = g_bot(xMid);
+                const yTop = f_top(xMid);
+                const height = yTop - yBot;
+
+                if (height <= 0.0001) continue;
+
+                const numSegs = Math.max(4, Math.floor(32 * (maxAngleRad / (2 * Math.PI))));
+                const shellGeom = new THREE.CylinderGeometry(xMid, xMid, height, numSegs, 1, true, 0, maxAngleRad);
+                shellGeom.translate(0, height / 2 + yBot, 0);
+
+                const hue = (i / N) * 0.45 + 0.45;
+                const mat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color().setHSL(hue, 0.85, 0.5),
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: state.opacity,
+                    side: THREE.DoubleSide
+                });
+
+                const mesh = new THREE.Mesh(shellGeom, mat);
+                riemannShellsGroup.add(mesh);
+
+                const wire = new THREE.LineSegments(
+                    new THREE.WireframeGeometry(shellGeom),
+                    new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.2 })
+                );
+                riemannShellsGroup.add(wire);
+            }
+
+            scene.add(riemannShellsGroup);
+        }
+
+        function build2DCrossSection(maxAngleRad) {
+            if (region2DMesh) scene.remove(region2DMesh);
+            if (region2DLinesGroup) scene.remove(region2DLinesGroup);
+
+            if (!state.showRegion2D) return;
+
+            region2DLinesGroup = new THREE.Group();
+
+            const createCurveLine = (curveFn, colorHex) => {
+                const points = [];
+                for (let i = 0; i <= 60; i++) {
+                    const x = (i / 60) * 3;
+                    const y = curveFn(x);
+                    points.push(new THREE.Vector3(x, y, 0));
+                }
+                const geom = new THREE.BufferGeometry().setFromPoints(points);
+                return new THREE.Line(geom, new THREE.LineBasicMaterial({ color: colorHex, linewidth: 3 }));
+            };
+
+            region2DLinesGroup.add(createCurveLine(f_top, 0x38bdf8));
+            region2DLinesGroup.add(createCurveLine(g_bot, 0xf59e0b));
+
+            const shape = new THREE.Shape();
+            shape.moveTo(0, 0);
+            for (let i = 0; i <= 40; i++) {
+                const x = (i / 40) * 3;
+                shape.lineTo(x, f_top(x));
+            }
+            for (let i = 40; i >= 0; i--) {
+                const x = (i / 40) * 3;
+                shape.lineTo(x, g_bot(x));
+            }
+
+            const shapeGeom = new THREE.ShapeGeometry(shape);
+            const shapeMat = new THREE.MeshBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.22,
+                side: THREE.DoubleSide
+            });
+            region2DMesh = new THREE.Mesh(shapeGeom, shapeMat);
+
+            scene.add(region2DMesh);
+            scene.add(region2DLinesGroup);
+        }
+
+        function updateVisualization() {
+            const rad = (state.sweepAngle * Math.PI) / 180;
+
+            if (solidMesh) solidMesh.visible = false;
+            if (wireframeMesh) wireframeMesh.visible = false;
+            if (singleShellMesh) singleShellMesh.visible = false;
+            if (singleShellCapMesh) singleShellCapMesh.visible = false;
+            if (riemannShellsGroup) riemannShellsGroup.visible = false;
+
+            build2DCrossSection(rad);
+
+            if (state.mode === 'solid') {
+                buildSolidGeometry(rad);
+            } else if (state.mode === 'shell') {
+                buildSingleShell(state.shellX, rad);
+            } else if (state.mode === 'riemann') {
+                buildRiemannShells(state.riemannN, rad);
+            }
+
+            if (axesGroup) axesGroup.visible = state.showAxes;
+            if (gridHelper) gridHelper.visible = state.showGrid;
+
+            updateCalculationsAndHUD();
+        }
+
+        function updateCalculationsAndHUD() {
+            const angleRatio = state.sweepAngle / 360;
+            const currentSolidVolume = EXACT_VOLUME * angleRatio;
+
+            const r = state.shellX;
+            const h = h_height(r);
+            const lateralArea = 2 * Math.PI * r * h;
+
+            document.getElementById('stat-radius').textContent = `${r.toFixed(2)} u`;
+            document.getElementById('stat-height').textContent = `${h.toFixed(2)} u`;
+            document.getElementById('stat-area').textContent = `${lateralArea.toFixed(2)} u²`;
+            document.getElementById('shell-x-val').textContent = `x = ${r.toFixed(2)}`;
+
+            const N = state.riemannN;
+            const dx = 3 / N;
+            let riemannSum = 0;
+            for (let i = 0; i < N; i++) {
+                const xMid = (i + 0.5) * dx;
+                riemannSum += 2 * Math.PI * xMid * h_height(xMid) * dx;
+            }
+            riemannSum *= angleRatio;
+
+            const errPercent = ((riemannSum - currentSolidVolume) / currentSolidVolume) * 100;
+
+            document.getElementById('stat-dx').textContent = `${dx.toFixed(3)} u`;
+            document.getElementById('stat-riemann-sum').textContent = `${riemannSum.toFixed(2)} u³`;
+            
+            const errElem = document.getElementById('stat-riemann-error');
+            errElem.textContent = `${errPercent >= 0 ? '+' : ''}${errPercent.toFixed(2)}%`;
+            errElem.className = errPercent >= 0 ? 'text-amber-400' : 'text-emerald-400';
+
+            const hudVolElem = document.getElementById('hud-volume');
+            if (state.mode === 'riemann') {
+                hudVolElem.textContent = `${riemannSum.toFixed(2)} u³ (N=${N})`;
+            } else {
+                hudVolElem.textContent = `${currentSolidVolume.toFixed(2)} u³ (${(13.5 * angleRatio).toFixed(2)}π)`;
+            }
+        }
+
+        function setupUIEventListeners() {
+            const tabSolid = document.getElementById('tab-solid');
+            const tabShell = document.getElementById('tab-shell');
+            const tabRiemann = document.getElementById('tab-riemann');
+
+            const secShell = document.getElementById('section-single-shell');
+            const secRiemann = document.getElementById('section-riemann-shells');
+
+            const setMode = (mode) => {
+                state.mode = mode;
+                [tabSolid, tabShell, tabRiemann].forEach(t => {
+                    t.className = 'tab-btn py-2 px-1 rounded-lg font-medium transition text-slate-400 hover:text-white text-center';
+                });
+
+                if (mode === 'solid') {
+                    tabSolid.className = 'tab-btn py-2 px-1 rounded-lg font-medium transition bg-indigo-600 text-white shadow text-center';
+                    secShell.classList.add('hidden');
+                    secRiemann.classList.add('hidden');
+                } else if (mode === 'shell') {
+                    tabShell.className = 'tab-btn py-2 px-1 rounded-lg font-medium transition bg-emerald-600 text-white shadow text-center';
+                    secShell.classList.remove('hidden');
+                    secRiemann.classList.add('hidden');
+                } else if (mode === 'riemann') {
+                    tabRiemann.className = 'tab-btn py-2 px-1 rounded-lg font-medium transition bg-indigo-600 text-white shadow text-center';
+                    secShell.classList.add('hidden');
+                    secRiemann.classList.remove('hidden');
+                }
+
+                updateVisualization();
+            };
+
+            tabSolid.addEventListener('click', () => setMode('solid'));
+            tabShell.addEventListener('click', () => setMode('shell'));
+            tabRiemann.addEventListener('click', () => setMode('riemann'));
+
+            const angleSlider = document.getElementById('slider-angle');
+            const angleValText = document.getElementById('angle-value');
+            angleSlider.addEventListener('input', (e) => {
+                state.sweepAngle = parseFloat(e.target.value);
+                angleValText.textContent = `${state.sweepAngle}°`;
+                updateVisualization();
+            });
+
+            document.getElementById('slider-shell-x').addEventListener('input', (e) => {
+                state.shellX = parseFloat(e.target.value);
+                updateVisualization();
+            });
+
+            const riemannNSlider = document.getElementById('slider-riemann-n');
+            const riemannNValText = document.getElementById('riemann-n-val');
+            riemannNSlider.addEventListener('input', (e) => {
+                state.riemannN = parseInt(e.target.value);
+                riemannNValText.textContent = `N = ${state.riemannN}`;
+                updateVisualization();
+            });
+
+            document.getElementById('slider-opacity').addEventListener('input', (e) => {
+                state.opacity = parseFloat(e.target.value);
+                document.getElementById('opacity-val').textContent = state.opacity.toFixed(2);
+                updateVisualization();
+            });
+
+            document.getElementById('chk-wireframe').addEventListener('change', (e) => {
+                state.wireframe = e.target.checked;
+                updateVisualization();
+            });
+            document.getElementById('chk-region-2d').addEventListener('change', (e) => {
+                state.showRegion2D = e.target.checked;
+                updateVisualization();
+            });
+            document.getElementById('chk-axes').addEventListener('change', (e) => {
+                state.showAxes = e.target.checked;
+                updateVisualization();
+            });
+            document.getElementById('chk-grid').addEventListener('change', (e) => {
+                state.showGrid = e.target.checked;
+                updateVisualization();
+            });
+
+            const btnPlay = document.getElementById('btn-play-rotation');
+            const textPlay = document.getElementById('text-play');
+            btnPlay.addEventListener('click', () => {
+                state.isAnimating = !state.isAnimating;
+                textPlay.textContent = state.isAnimating ? 'Pausar Rotación' : 'Animar Rotación';
+                if (state.isAnimating && state.sweepAngle >= 360) {
+                    state.sweepAngle = 0;
+                }
+            });
+
+            document.getElementById('btn-reset-cam').addEventListener('click', () => {
+                camera.position.set(6, 4.5, 7);
+                controls.target.set(0, 1.8, 0);
+                controls.update();
+            });
+
+            const mathPanel = document.getElementById('math-panel');
+            document.getElementById('btn-toggle-math').addEventListener('click', () => {
+                mathPanel.classList.toggle('translate-x-[110%]');
+            });
+            document.getElementById('btn-close-math').addEventListener('click', () => {
+                mathPanel.classList.add('translate-x-[110%]');
+            });
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (state.isAnimating) {
+                state.sweepAngle += state.animationSpeed;
+                if (state.sweepAngle >= 360) {
+                    state.sweepAngle = 360;
+                    state.isAnimating = false;
+                    document.getElementById('text-play').textContent = 'Animar Rotación';
+                }
+                document.getElementById('slider-angle').value = state.sweepAngle;
+                document.getElementById('angle-value').textContent = `${Math.round(state.sweepAngle)}°`;
+                updateVisualization();
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            initScene();
+        };
+    </script>
+</body>
+</html>
